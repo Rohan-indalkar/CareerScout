@@ -1,0 +1,8 @@
+com\careerscout\common\exception\BadRequestException.class
+com\careerscout\common\exception\ResourceNotFoundException.class
+com\careerscout\common\api\ApiResponse.class
+com\careerscout\common\exception\DuplicateResourceException.class
+com\careerscout\common\exception\GlobalExceptionHandler.class
+com\careerscout\CareerScoutApplication.class
+com\careerscout\health\HealthController.class
+com\careerscout\config\OpenApiConfig.class
