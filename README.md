@@ -1,6 +1,6 @@
 # CareerScout Backend
 
-CareerScout is being developed incrementally as a modular Spring Boot backend. Current completed phases include the project foundation, authentication and user management, career-source management, and search-profile management. Crawling, matching, scheduling, notifications, and job history are still planned backend phases.
+CareerScout is being developed incrementally as a modular Spring Boot backend. Completed phases include the project foundation, authentication and user management, career-source management, search-profile management, and job listing/match APIs. Crawling, automatic matching, scheduling, and notifications are planned backend phases.
 
 ## Requirements
 
@@ -70,7 +70,20 @@ Career sources require a bearer access token. URLs are restricted to HTTP/HTTPS,
 - `PATCH /api/v1/search-profiles/{id}/status` — activate/deactivate with `{"active": false}`
 - `DELETE /api/v1/search-profiles/{id}` — delete an owned profile
 
-The `experienceLevel` values are `FRESHER`, `ZERO_TO_ONE`, `ONE_TO_THREE`, `THREE_TO_FIVE`, `FIVE_PLUS`, and `ANY`. Profile names are unique per user after case/whitespace normalization. Profiles can be created independently of career sources; job matching and profile-to-job results are added in later phases.
+The `experienceLevel` values are `FRESHER`, `ZERO_TO_ONE`, `ONE_TO_THREE`, `THREE_TO_FIVE`, `FIVE_PLUS`, and `ANY`. Profile names are unique per user after case/whitespace normalization. Profiles can be created independently of career sources; automatic matching is added in a later phase.
+
+## Job APIs
+
+All job endpoints require a bearer access token and return only jobs associated with career sources owned by the authenticated user. Job records and profile-specific match records are read-only through the API; ingestion is added with the crawler phase.
+
+- `GET /api/v1/jobs` — list active jobs, newest last-seen first
+- `GET /api/v1/jobs/new` — list active jobs, newest first-seen first
+- `GET /api/v1/jobs/{id}` — retrieve one active, owned job
+- `GET /api/v1/jobs/matches` — list successful job matches with profile-specific explanations
+
+The list endpoints accept optional filters: `company`, `position`, `location`, `experience`, `skill`, `careerSourceId`, `dateFrom`, and `dateTo`. The general jobs endpoints also accept `matched` and `minScore`; the matches endpoint accepts `profileId` and `minScore`. Dates use ISO-8601 timestamps. Pagination uses zero-based `page` (default `0`) and `size` (default `20`, maximum `100`).
+
+Job responses include extracted job fields, skills, source ID, first/last-seen timestamps, and active status. Match responses include match score, individual criteria flags, explanation, rejection reason, and the associated search profile.
 
 ## Foundation endpoints
 
