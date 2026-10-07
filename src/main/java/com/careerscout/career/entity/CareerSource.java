@@ -38,6 +38,7 @@ public class CareerSource {
     private int scanIntervalMinutes;
 
     private Instant lastScannedAt;
+    private Instant lastScanAttemptAt;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -73,6 +74,17 @@ public class CareerSource {
         this.updatedAt = Instant.now();
     }
 
+    public void markScanned(Instant scannedAt) {
+        this.lastScannedAt = scannedAt;
+        this.lastScanAttemptAt = scannedAt;
+        this.updatedAt = scannedAt;
+    }
+
+    public void markScanAttempted(Instant attemptedAt) {
+        this.lastScanAttemptAt = attemptedAt;
+        this.updatedAt = attemptedAt;
+    }
+
     public Long getId() { return id; }
     public UserAccount getUser() { return user; }
     public String getCompanyName() { return companyName; }
@@ -81,6 +93,7 @@ public class CareerSource {
     public boolean isActive() { return active; }
     public int getScanIntervalMinutes() { return scanIntervalMinutes; }
     public Instant getLastScannedAt() { return lastScannedAt; }
+    public Instant getLastScanAttemptAt() { return lastScanAttemptAt; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

@@ -80,11 +80,18 @@ public class Job {
     public Job(CareerSource careerSource, String externalJobId, String title, String normalizedTitle,
                String location, String experience, String description, String jobUrl,
                Set<String> skills, String contentHash, Instant firstSeenAt) {
+        this(careerSource, externalJobId, title, normalizedTitle, careerSource.getCompanyName(),
+                location, experience, description, jobUrl, skills, contentHash, firstSeenAt);
+    }
+
+    public Job(CareerSource careerSource, String externalJobId, String title, String normalizedTitle,
+               String companyName, String location, String experience, String description, String jobUrl,
+               Set<String> skills, String contentHash, Instant firstSeenAt) {
         this.careerSource = careerSource;
         this.externalJobId = externalJobId;
         this.title = title;
         this.normalizedTitle = normalizedTitle;
-        this.companyName = careerSource.getCompanyName();
+        this.companyName = companyName;
         this.location = location;
         this.experience = experience;
         this.description = description;
@@ -96,6 +103,36 @@ public class Job {
         this.active = true;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
+    }
+
+    public boolean refreshFromScan(String externalJobId, String title, String normalizedTitle,
+                                   String companyName,
+                                   String location, String experience, String description, String jobUrl,
+                                   Set<String> skills, String contentHash, Instant seenAt) {
+        boolean changed = !java.util.Objects.equals(this.contentHash, contentHash)
+                || !java.util.Objects.equals(this.title, title)
+                || !java.util.Objects.equals(this.normalizedTitle, normalizedTitle)
+                || !java.util.Objects.equals(this.companyName, companyName)
+                || !java.util.Objects.equals(this.location, location)
+                || !java.util.Objects.equals(this.experience, experience)
+                || !java.util.Objects.equals(this.description, description)
+                || !java.util.Objects.equals(this.jobUrl, jobUrl)
+                || !this.skills.equals(skills)
+                || !this.active;
+        this.externalJobId = externalJobId;
+        this.title = title;
+        this.normalizedTitle = normalizedTitle;
+        this.companyName = companyName;
+        this.location = location;
+        this.experience = experience;
+        this.description = description;
+        this.jobUrl = jobUrl;
+        this.skills = new LinkedHashSet<>(skills);
+        this.contentHash = contentHash;
+        this.lastSeenAt = seenAt;
+        this.active = true;
+        this.updatedAt = seenAt;
+        return changed;
     }
 
     public Long getId() { return id; }

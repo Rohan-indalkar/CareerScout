@@ -16,7 +16,7 @@ public interface JobService {
     JobResponse findById(AuthenticatedUser user, Long jobId);
 
     Page<JobMatchResponse> findMatches(AuthenticatedUser user, String company, String position,
-                                       String location, String experience, Integer minScore,
+                                       String location, String experience, Boolean matched, Integer minScore,
                                        Long careerSourceId, Long profileId, Instant dateFrom,
                                        Instant dateTo, int page, int size);
 }

@@ -8,4 +8,6 @@ import java.util.Optional;
 
 public interface JobRepository extends JpaRepository<Job, Long>, JpaSpecificationExecutor<Job> {
     Optional<Job> findByIdAndCareerSourceUserId(Long id, Long userId);
+    Optional<Job> findByCareerSourceIdAndExternalJobId(Long careerSourceId, String externalJobId);
+    Optional<Job> findByCareerSourceIdAndJobUrl(Long careerSourceId, String jobUrl);
 }

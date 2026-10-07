@@ -2,7 +2,9 @@ package com.careerscout.career.controller;
 
 import com.careerscout.career.dto.CareerSourceRequest;
 import com.careerscout.career.dto.CareerSourceResponse;
+import com.careerscout.career.dto.CareerSourceScanResponse;
 import com.careerscout.career.dto.CareerSourceStatusRequest;
+import com.careerscout.career.service.CareerPageScanService;
 import com.careerscout.career.service.CareerSourceService;
 import com.careerscout.common.api.ApiResponse;
 import com.careerscout.security.AuthenticatedUser;
@@ -24,9 +26,12 @@ import java.util.Map;
 @SecurityRequirement(name = "bearerAuth")
 public class CareerSourceController {
     private final CareerSourceService careerSourceService;
+    private final CareerPageScanService careerPageScanService;
 
-    public CareerSourceController(CareerSourceService careerSourceService) {
+    public CareerSourceController(CareerSourceService careerSourceService,
+                                  CareerPageScanService careerPageScanService) {
         this.careerSourceService = careerSourceService;
+        this.careerPageScanService = careerPageScanService;
     }
 
     @PostMapping
@@ -73,6 +78,15 @@ public class CareerSourceController {
             @AuthenticationPrincipal AuthenticatedUser user, HttpServletRequest request) {
         return ApiResponse.success("Career source status updated successfully",
                 careerSourceService.updateStatus(user, id, body.active()), request.getRequestURI());
+    }
+
+    @PostMapping("/{id}/scan")
+    @Operation(summary = "Fetch a career page and ingest its discovered job postings")
+    ApiResponse<CareerSourceScanResponse> scan(
+            @PathVariable Long id, @AuthenticationPrincipal AuthenticatedUser user,
+            HttpServletRequest request) {
+        return ApiResponse.success("Career page scanned successfully",
+                careerPageScanService.scan(user, id), request.getRequestURI());
     }
 
     @DeleteMapping("/{id}")

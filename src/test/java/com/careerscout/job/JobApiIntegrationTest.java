@@ -2,7 +2,10 @@ package com.careerscout.job;
 
 import com.careerscout.auth.repository.AuthSessionRepository;
 import com.careerscout.auth.repository.RefreshTokenRepository;
+import com.careerscout.career.crawler.CareerPageFetcher;
 import com.careerscout.career.repository.CareerSourceRepository;
+import com.careerscout.career.service.ScheduledCareerPageScanner;
+import com.careerscout.common.exception.UpstreamServiceException;
 import com.careerscout.job.entity.Job;
 import com.careerscout.job.entity.JobMatch;
 import com.careerscout.job.repository.JobMatchRepository;
@@ -20,16 +23,26 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.Instant;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -46,9 +59,12 @@ class JobApiIntegrationTest {
     @Autowired private SearchProfileRepository searchProfiles;
     @Autowired private JobRepository jobs;
     @Autowired private JobMatchRepository matches;
+    @Autowired private ScheduledCareerPageScanner scheduledScanner;
+    @MockitoBean private CareerPageFetcher pageFetcher;
 
     @BeforeEach
     void cleanDatabase() {
+        reset(pageFetcher);
         matches.deleteAll();
         jobs.deleteAll();
         searchProfiles.deleteAll();
@@ -56,6 +72,141 @@ class JobApiIntegrationTest {
         refreshTokens.deleteAll();
         sessions.deleteAll();
         users.deleteAll();
+    }
+
+    @Test
+    void scansCareerPageAndCreatesThenUpdatesDiscoveredJobsIdempotently() throws Exception {
+        Fixture fixture = createFixture("scan-owner@example.com");
+        String page = """
+                <script type="application/ld+json">
+                {"@graph":[
+                {"@type":"JobPosting","title":"Java Developer","identifier":{"value":"REQ-1"},
+                "url":"/jobs/req-1","jobLocation":{"address":{"addressLocality":"Pune"}},
+                "experienceRequirements":"Fresher","description":"<p>Build APIs</p>",
+                "skills":["Java","Spring Boot"]},
+                {"@type":"JobPosting","title":"Senior Product Manager","identifier":{"value":"REQ-2"},
+                "url":"/jobs/req-2","jobLocation":{"address":{"addressLocality":"Toronto"}},
+                "experienceRequirements":"5+ years","description":"Lead product teams",
+                "skills":["Python"]}
+                ]}
+                </script>
+                """;
+        when(pageFetcher.fetch("https://example.com/jobs")).thenReturn(page, page,
+                page.replace("Build APIs", "Build reliable APIs"));
+
+        mockMvc.perform(post("/api/v1/career-sources/" + fixture.source().getId() + "/scan")
+                        .header("Authorization", bearer(fixture.token())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.discoveredJobs").value(2))
+                .andExpect(jsonPath("$.data.createdJobs").value(2))
+                .andExpect(jsonPath("$.data.updatedJobs").value(0));
+
+        mockMvc.perform(post("/api/v1/career-sources/" + fixture.source().getId() + "/scan")
+                        .header("Authorization", bearer(fixture.token())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.createdJobs").value(0))
+                .andExpect(jsonPath("$.data.unchangedJobs").value(2));
+
+        mockMvc.perform(post("/api/v1/career-sources/" + fixture.source().getId() + "/scan")
+                        .header("Authorization", bearer(fixture.token())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.updatedJobs").value(1));
+
+        mockMvc.perform(get("/api/v1/jobs/matches")
+                        .header("Authorization", bearer(fixture.token())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].matchScore").value(100))
+                .andExpect(jsonPath("$.data[0].matched").value(true))
+                .andExpect(jsonPath("$.data[0].matchExplanation").value(
+                        "Position matched; Location matched; Experience matched; 1 of 1 required skills matched; 1 of 1 keywords matched"));
+
+        mockMvc.perform(get("/api/v1/jobs/matches")
+                        .param("matched", "false")
+                        .header("Authorization", bearer(fixture.token())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].matched").value(false))
+                .andExpect(jsonPath("$.data[0].rejectionReason").value(
+                        "Position does not match the profile; Location does not match the profile; Experience does not match the profile; One or more required skills are missing; One or more required keywords are missing"));
+
+        mockMvc.perform(get("/api/v1/jobs").header("Authorization", bearer(fixture.token())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2));
+    }
+
+    @Test
+    void scanDoesNotFetchCareerSourcesOwnedByAnotherUser() throws Exception {
+        Fixture owner = createFixture("scan-owner-two@example.com");
+        Fixture otherUser = createFixture("scan-other@example.com");
+
+        mockMvc.perform(post("/api/v1/career-sources/" + owner.source().getId() + "/scan")
+                        .header("Authorization", bearer(otherUser.token())))
+                .andExpect(status().isNotFound());
+
+        verifyNoInteractions(pageFetcher);
+    }
+
+    @Test
+    void inactiveCareerSourcesCannotBeManuallyOrAutomaticallyScanned() throws Exception {
+        Fixture fixture = createFixture("scan-inactive@example.com");
+        fixture.source().setActive(false);
+        careerSources.saveAndFlush(fixture.source());
+
+        mockMvc.perform(post("/api/v1/career-sources/" + fixture.source().getId() + "/scan")
+                        .header("Authorization", bearer(fixture.token())))
+                .andExpect(status().isBadRequest());
+
+        scheduledScanner.scanDueSources();
+        verifyNoInteractions(pageFetcher);
+    }
+
+    @Test
+    void failedFetchDoesNotReportSuccessOrAdvanceLastScannedTime() throws Exception {
+        Fixture fixture = createFixture("scan-failure@example.com");
+        when(pageFetcher.fetch("https://example.com/jobs"))
+                .thenThrow(new UpstreamServiceException("Career page could not be fetched"));
+
+        mockMvc.perform(post("/api/v1/career-sources/" + fixture.source().getId() + "/scan")
+                        .header("Authorization", bearer(fixture.token())))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.success").value(false));
+
+        assertNull(careerSources.findById(fixture.source().getId()).orElseThrow().getLastScannedAt());
+        assertEquals(0L, jobs.count());
+        verify(pageFetcher).fetch("https://example.com/jobs");
+    }
+
+    @Test
+    void scheduledScanHonorsPerSourceIntervalsAndContinuesAfterOneSourceFails() throws Exception {
+        String failedUrl = "https://first.example/careers";
+        String successfulUrl = "https://second.example/careers";
+        String notDueUrl = "https://third.example/careers";
+        Fixture failed = createFixture("scheduled-fail@example.com", failedUrl);
+        Fixture successful = createFixture("scheduled-success@example.com", successfulUrl);
+        Fixture notDue = createFixture("scheduled-not-due@example.com", notDueUrl);
+        notDue.source().markScanAttempted(Instant.now());
+        careerSources.saveAndFlush(notDue.source());
+
+        when(pageFetcher.fetch(failedUrl))
+                .thenThrow(new UpstreamServiceException("Career page could not be fetched"));
+        when(pageFetcher.fetch(successfulUrl)).thenReturn("""
+                <script type="application/ld+json">
+                {"@type":"JobPosting","title":"Java Developer","url":"/jobs/req-1",
+                "jobLocation":{"address":{"addressLocality":"Pune"}},
+                "experienceRequirements":"Fresher","skills":["Java"]}
+                </script>
+                """);
+
+        scheduledScanner.scanDueSources();
+
+        verify(pageFetcher).fetch(failedUrl);
+        verify(pageFetcher).fetch(successfulUrl);
+        verify(pageFetcher, never()).fetch(notDueUrl);
+        assertEquals(1L, jobs.count());
+        assertNull(careerSources.findById(failed.source().getId()).orElseThrow().getLastScannedAt());
+        assertNotNull(careerSources.findById(failed.source().getId()).orElseThrow().getLastScanAttemptAt());
+        assertNotNull(careerSources.findById(successful.source().getId()).orElseThrow().getLastScannedAt());
     }
 
     @Test
@@ -148,6 +299,10 @@ class JobApiIntegrationTest {
     }
 
     private Fixture createFixture(String email) throws Exception {
+        return createFixture(email, "https://example.com/jobs");
+    }
+
+    private Fixture createFixture(String email, String careerUrl) throws Exception {
         JsonNode registration = read(mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -161,8 +316,8 @@ class JobApiIntegrationTest {
                         .header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"companyName":"Example Corp","careerUrl":"https://example.com/jobs","scanIntervalMinutes":60}
-                                """))
+                                {"companyName":"Example Corp","careerUrl":"%s","scanIntervalMinutes":60}
+                                """.formatted(careerUrl)))
                 .andExpect(status().isCreated())
                 .andReturn());
         JsonNode profileResponse = read(mockMvc.perform(post("/api/v1/search-profiles")

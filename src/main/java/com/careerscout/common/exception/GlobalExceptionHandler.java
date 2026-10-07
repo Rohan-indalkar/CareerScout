@@ -75,6 +75,13 @@ public class GlobalExceptionHandler {
         return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of(), request);
     }
 
+    @ExceptionHandler(UpstreamServiceException.class)
+    ResponseEntity<ApiResponse<Void>> handleUpstreamFailure(
+            UpstreamServiceException exception, HttpServletRequest request) {
+        logger.warn("Career page scan failed for {}: {}", request.getRequestURI(), exception.getMessage());
+        return response(HttpStatus.BAD_GATEWAY, exception.getMessage(), Map.of(), request);
+    }
+
     @ExceptionHandler({DuplicateResourceException.class, DataIntegrityViolationException.class})
     ResponseEntity<ApiResponse<Void>> handleConflict(Exception exception, HttpServletRequest request) {
         String message = exception instanceof DuplicateResourceException

@@ -87,6 +87,7 @@ public class JobController {
             @RequestParam(required = false) String position,
             @RequestParam(required = false) String location,
             @RequestParam(required = false) String experience,
+            @RequestParam(defaultValue = "true") Boolean matched,
             @RequestParam(required = false) @Min(0) @Max(100) Integer minScore,
             @RequestParam(required = false) @Min(1) Long careerSourceId,
             @RequestParam(required = false) @Min(1) Long profileId,
@@ -95,7 +96,7 @@ public class JobController {
             @RequestParam(defaultValue = "0") @Min(0) Integer page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) Integer size,
             HttpServletRequest request) {
-        var result = jobService.findMatches(user, company, position, location, experience, minScore,
+        var result = jobService.findMatches(user, company, position, location, experience, matched, minScore,
                 careerSourceId, profileId, dateFrom, dateTo, page, size);
         return PaginatedApiResponse.success("Matched jobs fetched successfully", result.getContent(),
                 metadata(result), request.getRequestURI());

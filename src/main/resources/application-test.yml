@@ -14,6 +14,10 @@ spring:
 app:
   jwt:
     secret: test-only-signing-key-do-not-use-outside-tests-123456
+  crawler:
+    scheduler:
+      initial-delay: PT24H
+      poll-interval: PT24H
 
 management:
   health:

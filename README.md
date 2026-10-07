@@ -1,6 +1,6 @@
 # CareerScout Backend
 
-CareerScout is being developed incrementally as a modular Spring Boot backend. Completed phases include the project foundation, authentication and user management, career-source management, search-profile management, and job listing/match APIs. Crawling, automatic matching, scheduling, and notifications are planned backend phases.
+CareerScout is being developed incrementally as a modular Spring Boot backend. Completed phases include the project foundation, authentication and user management, career-source management, search-profile management, job listing/match APIs, manual career-page crawling/job extraction, profile-based job matching, and scheduled career-page scanning. Notifications are planned for a later phase.
 
 ## Requirements
 
@@ -59,7 +59,15 @@ All success and error responses use the common response envelope. Public registr
 - `PATCH /api/v1/career-sources/{id}/status` — activate/deactivate with `{"active": false}`
 - `DELETE /api/v1/career-sources/{id}` — delete an owned source
 
-Career sources require a bearer access token. URLs are restricted to HTTP/HTTPS, reject embedded credentials and local/private literal addresses, and are canonicalized for per-user duplicate detection. The accepted scan interval is 5–10,080 minutes. Scanning is not part of this phase; manual and scheduled scan operations are added with the crawler/monitoring phases.
+Career sources require a bearer access token. URLs are restricted to HTTP/HTTPS, reject embedded credentials and local/private literal addresses, and are canonicalized for per-user duplicate detection. The accepted scan interval is 5–10,080 minutes. The scan interval is metadata only until scheduled scanning is added.
+
+## Manual career-page scan
+
+- `POST /api/v1/career-sources/{id}/scan` — fetch an owned, active career page, extract job postings, and insert/update job records
+
+The response reports discovered, created, updated, and unchanged job counts. A successful scan updates the source's `lastScannedAt`. Duplicate postings are reconciled by the posting's structured identifier, then by canonical job URL; SHA-256 content hashes detect changed postings while preserving their original `firstSeenAt`. Each scan also evaluates discovered jobs against every active search profile belonging to the source owner and inserts or updates one profile-specific match record.
+
+Extraction supports Schema.org `JobPosting` JSON-LD and a conservative fallback for links whose paths look like job/career/opening/position/role pages. The fallback cannot reliably infer structured location, experience, or skills. Client-rendered pages that require JavaScript are not rendered. Requests are bounded to an 8-second timeout and 2 MB response body; redirects are rejected, and resolved destinations must be public internet addresses.
 
 ## Search profile APIs
 
@@ -74,16 +82,24 @@ The `experienceLevel` values are `FRESHER`, `ZERO_TO_ONE`, `ONE_TO_THREE`, `THRE
 
 ## Job APIs
 
-All job endpoints require a bearer access token and return only jobs associated with career sources owned by the authenticated user. Job records and profile-specific match records are read-only through the API; ingestion is added with the crawler phase.
+All job endpoints require a bearer access token and return only jobs associated with career sources owned by the authenticated user. Job records and profile-specific match records are read-only through the API; they are populated by manual scans.
 
 - `GET /api/v1/jobs` — list active jobs, newest last-seen first
 - `GET /api/v1/jobs/new` — list active jobs, newest first-seen first
 - `GET /api/v1/jobs/{id}` — retrieve one active, owned job
-- `GET /api/v1/jobs/matches` — list successful job matches with profile-specific explanations
+- `GET /api/v1/jobs/matches` — list successful matches with profile-specific explanations; pass `matched=false` to inspect rejected jobs and their reasons
 
-The list endpoints accept optional filters: `company`, `position`, `location`, `experience`, `skill`, `careerSourceId`, `dateFrom`, and `dateTo`. The general jobs endpoints also accept `matched` and `minScore`; the matches endpoint accepts `profileId` and `minScore`. Dates use ISO-8601 timestamps. Pagination uses zero-based `page` (default `0`) and `size` (default `20`, maximum `100`).
+The list endpoints accept optional filters: `company`, `position`, `location`, `experience`, `skill`, `careerSourceId`, `dateFrom`, and `dateTo`. The general jobs endpoints also accept `matched` and `minScore`; the matches endpoint accepts `matched` (defaults to `true`), `profileId`, and `minScore`. Dates use ISO-8601 timestamps. Pagination uses zero-based `page` (default `0`) and `size` (default `20`, maximum `100`).
 
 Job responses include extracted job fields, skills, source ID, first/last-seen timestamps, and active status. Match responses include match score, individual criteria flags, explanation, rejection reason, and the associated search profile.
+
+Matching uses case-insensitive phrase comparisons for position and location, experience-range overlap for experience levels, and checks required skills and keywords against extracted job data. All configured profile criteria must match for a result to be marked matched; `ANY` experience accepts unknown experience. The score weights are position 30%, location 25%, experience 25%, skills 15%, and keywords 5%; the score is normalized over criteria configured on a profile. A profile change is applied to its jobs on the next scan.
+
+## Scheduled scanning
+
+Active career sources are checked periodically and scanned when their `scanIntervalMinutes` has elapsed since the last scan attempt. The scheduler checks once per minute by default, starts 30 seconds after application startup, and isolates failures so one source cannot prevent other due sources from being checked. Failed attempts are logged and retried after the source's configured interval; successful scans update `lastScannedAt`.
+
+Configure the scheduler with `CAREERSCOUT_SCAN_INITIAL_DELAY` and `CAREERSCOUT_SCAN_POLL_INTERVAL` as ISO-8601 durations (defaults `PT30S` and `PT1M`). Set a long duration or disable the scheduler in deployment configuration if scheduled scanning should not run in that environment.
 
 ## Foundation endpoints
 

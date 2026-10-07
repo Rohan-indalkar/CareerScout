@@ -19,6 +19,11 @@ public final class JobMatchSpecifications {
         return (root, query, builder) -> builder.equal(root.get("matched"), matched);
     }
 
+    public static Specification<JobMatch> matchedStatus(Boolean matched) {
+        return (root, query, builder) -> matched == null ? builder.conjunction()
+                : builder.equal(root.get("matched"), matched);
+    }
+
     public static Specification<JobMatch> scoreAtLeast(Integer score) {
         return (root, query, builder) -> score == null ? builder.conjunction()
                 : builder.greaterThanOrEqualTo(root.get("matchScore"), score);

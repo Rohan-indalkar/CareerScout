@@ -70,13 +70,13 @@ public class JobServiceImpl implements JobService {
     @Override
     @Transactional(readOnly = true)
     public Page<JobMatchResponse> findMatches(AuthenticatedUser user, String company, String position,
-                                              String location, String experience, Integer minScore,
+                                              String location, String experience, Boolean matched, Integer minScore,
                                               Long careerSourceId, Long profileId, Instant dateFrom,
                                               Instant dateTo, int page, int size) {
         validatePage(page, size);
         validateDateRange(dateFrom, dateTo);
         Specification<JobMatch> specification = JobMatchSpecifications.ownedBy(user.id())
-                .and(JobMatchSpecifications.isMatched(true))
+                .and(JobMatchSpecifications.matchedStatus(matched))
                 .and(JobMatchSpecifications.scoreAtLeast(minScore))
                 .and(JobMatchSpecifications.profileId(profileId))
                 .and(JobMatchSpecifications.companyContains(clean(company)))

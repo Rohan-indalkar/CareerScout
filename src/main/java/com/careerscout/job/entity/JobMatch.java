@@ -77,6 +77,22 @@ public class JobMatch {
         this.matchedAt = matchedAt == null ? Instant.now() : matchedAt;
     }
 
+    public void updateEvaluation(int matchScore, boolean matched, boolean positionMatched,
+                                 boolean locationMatched, boolean experienceMatched, boolean skillsMatched,
+                                 boolean keywordMatched, String matchExplanation, String rejectionReason,
+                                 Instant evaluatedAt) {
+        this.matchScore = matchScore;
+        this.matched = matched;
+        this.positionMatched = positionMatched;
+        this.locationMatched = locationMatched;
+        this.experienceMatched = experienceMatched;
+        this.skillsMatched = skillsMatched;
+        this.keywordMatched = keywordMatched;
+        this.matchExplanation = matchExplanation;
+        this.rejectionReason = rejectionReason;
+        this.matchedAt = evaluatedAt;
+    }
+
     public Long getId() { return id; }
     public Job getJob() { return job; }
     public SearchProfile getSearchProfile() { return searchProfile; }

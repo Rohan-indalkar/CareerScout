@@ -37,3 +37,7 @@ app:
     secret: ${JWT_SECRET}
     access-token-expiration: ${JWT_ACCESS_EXPIRATION:PT15M}
     refresh-token-expiration: ${JWT_REFRESH_EXPIRATION:P7D}
+  crawler:
+    scheduler:
+      initial-delay: ${CAREERSCOUT_SCAN_INITIAL_DELAY:PT30S}
+      poll-interval: ${CAREERSCOUT_SCAN_POLL_INTERVAL:PT1M}

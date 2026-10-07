@@ -7,6 +7,7 @@ import java.util.Optional;
 
 public interface SearchProfileRepository extends JpaRepository<SearchProfile, Long> {
     List<SearchProfile> findAllByUserIdOrderByCreatedAtDesc(Long userId);
+    List<SearchProfile> findAllByUserIdAndActiveTrueOrderByCreatedAtDesc(Long userId);
     Optional<SearchProfile> findByIdAndUserId(Long id, Long userId);
     boolean existsByUserIdAndNormalizedName(Long userId, String normalizedName);
     boolean existsByUserIdAndNormalizedNameAndIdNot(Long userId, String normalizedName, Long id);
